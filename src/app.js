@@ -8,6 +8,16 @@ import accessRoutes from './routes/access.js';
 import adminRoutes from './routes/admin.js';
 import wishRoutes from './routes/wishes.js';
 
+function normalizeOrigin(origin) {
+  if (!origin) return '';
+
+  try {
+    return new URL(origin).origin;
+  } catch {
+    return origin.trim().replace(/\/+$/, '');
+  }
+}
+
 export function createApp() {
   const app = express();
   app.set('trust proxy', config.trustProxy);
@@ -20,9 +30,11 @@ export function createApp() {
           return;
         }
 
-        const isExactMatch = config.clientOrigins.includes(origin);
-        const isVercelPreview = /^(https?:\/\/)[a-z0-9-]+\.vercel\.app$/i.test(origin);
-        const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin);
+        const normalizedOrigin = normalizeOrigin(origin);
+        const allowedOrigins = config.clientOrigins.map(normalizeOrigin);
+        const isExactMatch = allowedOrigins.includes(normalizedOrigin);
+        const isVercelPreview = /^(https?:\/\/)[a-z0-9-]+\.vercel\.app$/i.test(normalizedOrigin);
+        const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(normalizedOrigin);
 
         if (isExactMatch || isVercelPreview || isLocalhost) {
           callback(null, true);
