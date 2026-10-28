@@ -54,6 +54,13 @@ export function createApp() {
     })
   );
 
+  app.get('/', (_req, res) => {
+    res.json({
+      status: 'ok',
+      message: 'Birthday wish API is running. Use the /api routes for the application endpoints.',
+    });
+  });
+
   app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
   app.use('/api/access', accessRoutes);
   app.use('/api/wishes', wishRoutes);

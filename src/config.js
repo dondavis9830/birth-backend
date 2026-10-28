@@ -8,6 +8,13 @@ function required(name) {
   return value;
 }
 
+export function normalizeClientOrigins(rawOrigins) {
+  return (rawOrigins || 'http://localhost:5173')
+    .split(',')
+    .map((origin) => origin.trim().replace(/\/$/, ''))
+    .filter(Boolean);
+}
+
 function positiveInteger(name, fallback) {
   const raw = process.env[name];
   if (!raw) return fallback;
@@ -33,10 +40,7 @@ if (jwtSecret.length < 32) {
 
 export const config = {
   port: positiveInteger('PORT', 4000),
-  clientOrigins: (process.env.CLIENT_ORIGINS || 'http://localhost:5173')
-    .split(',')
-    .map((origin) => origin.trim())
-    .filter(Boolean),
+  clientOrigins: normalizeClientOrigins(process.env.CLIENT_ORIGINS),
   trustProxy: process.env.TRUST_PROXY || 'loopback',
   mongoUri: required('MONGODB_URI'),
   cloudinary: {
