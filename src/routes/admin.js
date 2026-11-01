@@ -76,9 +76,6 @@ router.patch('/wishes/:id', requireAdmin, async (req, res) => {
 
   wish.status = status;
   wish.approvedAt = status === 'approved' ? new Date() : null;
-  if (status === 'rejected') {
-    wish.videoUrl = '';
-  }
   await wish.save();
 
   return res.json({
@@ -107,7 +104,6 @@ router.delete('/wishes/:id', requireAdmin, async (req, res) => {
     }
 
     wish.status = 'rejected';
-    wish.videoUrl = '';
     wish.deletedAt = new Date();
     await wish.save();
 
