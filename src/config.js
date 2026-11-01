@@ -56,5 +56,5 @@ export const config = {
   adminPasswordHash: requiredBcryptHash('ADMIN_PASSWORD_HASH'),
   jwtSecret,
   maxVideoBytes: positiveInteger('MAX_VIDEO_BYTES', 100 * 1024 * 1024),
-  maxVideoSeconds: 20,
+  maxVideoSeconds: 22,
 };

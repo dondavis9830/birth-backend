@@ -10,7 +10,12 @@ import { config } from '../config.js';
 import { Wish } from '../models/Wish.js';
 
 const router = Router();
-const allowedVideoTypes = new Set(['video/mp4', 'video/webm', 'video/quicktime']);
+const videoExtensions = [
+  '.mp4', '.m4v', '.mov', '.3gp', '.3gpp', '.3g2', '.webm', '.avi', '.mkv', '.wmv',
+  '.flv', '.mpeg', '.mpg', '.m2ts', '.ts', '.mts', '.mxf', '.dv', '.f4v', '.m2v', '.vob',
+  '.ogv', '.divx', '.xvid'
+];
+
 const upload = multer({
   storage: multer.diskStorage({
     destination: os.tmpdir(),
@@ -18,11 +23,17 @@ const upload = multer({
   }),
   limits: { fileSize: config.maxVideoBytes, files: 1 },
   fileFilter(_req, file, callback) {
-    if (!allowedVideoTypes.has(file.mimetype)) {
-      callback(new Error('Choose an MP4, WebM, or MOV video.'));
+    const mimeType = file.mimetype?.split(';', 1)[0]?.trim().toLowerCase();
+    const fileName = (file.originalname || '').toLowerCase();
+    const hasValidExtension = videoExtensions.some((ext) => fileName.endsWith(ext));
+    const isVideoMime = mimeType?.startsWith('video/');
+
+    if (isVideoMime || hasValidExtension) {
+      callback(null, true);
       return;
     }
-    callback(null, true);
+
+    callback(new Error('Choose a valid video file.'));
   },
 });
 
@@ -53,13 +64,59 @@ function requirePageAccess(page) {
   };
 }
 
-function uploadVideo(filePath) {
-  return cloudinary.uploader.upload(filePath, {
+async function removeCloudinaryVideo(publicId) {
+  const result = await cloudinary.uploader.destroy(publicId, {
+    resource_type: 'video',
+    invalidate: true,
+  });
+
+  if (result.result !== 'ok' && result.result !== 'not found') {
+    throw new Error(`Cloudinary did not remove the video (${result.result}).`);
+  }
+}
+
+async function uploadVideo(filePath) {
+  const commonOptions = {
     folder: 'birthday-wishes',
     resource_type: 'video',
     use_filename: false,
     unique_filename: true,
-  });
+    quality: 'auto:good',
+    fetch_format: 'auto',
+  };
+
+  try {
+    return await cloudinary.uploader.upload(filePath, {
+      ...commonOptions,
+      transformation: [
+        {
+          width: 720,
+          height: 1280,
+          crop: 'limit',
+          quality: 'auto:good',
+          fetch_format: 'auto',
+          video_codec: 'h264',
+          audio_codec: 'aac',
+        },
+      ],
+    });
+  } catch (transcodeError) {
+    const message = String(transcodeError?.message || '').toLowerCase();
+    const isFormatIssue = [
+      'unsupported',
+      'not a valid',
+      'codec',
+      'video format',
+      'invalid video',
+      'file type',
+    ].some((errorText) => message.includes(errorText));
+
+    if (isFormatIssue) {
+      return cloudinary.uploader.upload(filePath, commonOptions);
+    }
+
+    throw transcodeError;
+  }
 }
 
 router.get('/', requirePageAccess('birthday'), async (_req, res) => {
@@ -72,8 +129,8 @@ router.get('/', requirePageAccess('birthday'), async (_req, res) => {
 
 router.post(
   '/',
-  requirePageAccess('wish'),
   submissionLimit,
+  requirePageAccess('wish'),
   upload.single('video'),
   async (req, res) => {
     const filePath = req.file?.path;
@@ -126,7 +183,14 @@ router.post(
           console.error('Failed to clean up an unlinked Cloudinary upload:', cleanupError);
         }
       }
-      throw error;
+
+      const detail = error?.message || 'The video upload failed.';
+      const normalized = String(detail).trim();
+      const friendlyMessage = normalized.toLowerCase().includes('unsupported') || normalized.toLowerCase().includes('codec') || normalized.toLowerCase().includes('not a valid') || normalized.toLowerCase().includes('video format')
+        ? 'This video format is not supported. Please upload a standard MP4/MOV video under 22 seconds and try again.'
+        : normalized || 'The video upload could not be completed. Please try a different video file.';
+
+      return res.status(400).json({ error: friendlyMessage });
     } finally {
       if (filePath) {
         await fs.rm(filePath, { force: true });
