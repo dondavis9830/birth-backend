@@ -92,13 +92,15 @@ router.delete('/wishes/:id', requireAdmin, async (req, res) => {
     return res.status(400).json({ error: 'Invalid video-wish ID.' });
   }
 
-  const wish = await Wish.findOne({ _id: id, deletedAt: null }).select('+publicId');
-  if (!wish) {
+  const wish = await Wish.findById(id).select('+publicId');
+  if (!wish || wish.deletedAt) {
     return res.status(404).json({ error: 'Video wish not found.' });
   }
 
   try {
-    await removeCloudinaryVideo(wish.publicId);
+    if (wish.publicId) {
+      await removeCloudinaryVideo(wish.publicId);
+    }
   } catch (error) {
     console.error('Cloudinary cleanup failed while deleting a video wish:', error);
   }
