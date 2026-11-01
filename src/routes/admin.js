@@ -92,25 +92,30 @@ router.delete('/wishes/:id', requireAdmin, async (req, res) => {
     return res.status(400).json({ error: 'Invalid video-wish ID.' });
   }
 
-  const wish = await Wish.findById(id).select('+publicId');
-  if (!wish || wish.deletedAt) {
-    return res.status(404).json({ error: 'Video wish not found.' });
-  }
-
   try {
-    if (wish.publicId) {
-      await removeCloudinaryVideo(wish.publicId);
+    const wish = await Wish.findById(id).select('+publicId');
+    if (!wish || wish.deletedAt) {
+      return res.status(404).json({ error: 'Video wish not found.' });
     }
+
+    try {
+      if (wish.publicId) {
+        await removeCloudinaryVideo(wish.publicId);
+      }
+    } catch (error) {
+      console.error('Cloudinary cleanup failed while deleting a video wish:', error);
+    }
+
+    wish.status = 'rejected';
+    wish.videoUrl = '';
+    wish.deletedAt = new Date();
+    await wish.save();
+
+    return res.json({ message: 'Video wish permanently deleted.' });
   } catch (error) {
-    console.error('Cloudinary cleanup failed while deleting a video wish:', error);
+    console.error('Failed to delete a video wish:', error);
+    return res.status(500).json({ error: 'The video could not be deleted. Please try again.' });
   }
-
-  wish.status = 'rejected';
-  wish.videoUrl = '';
-  wish.deletedAt = new Date();
-  await wish.save();
-
-  return res.json({ message: 'Video wish permanently deleted.' });
 });
 
 export default router;
