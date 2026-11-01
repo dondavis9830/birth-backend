@@ -39,10 +39,14 @@ const wishSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    deletedAt: {
+      type: Date,
+      default: null,
+    },
   },
   { timestamps: true }
 );
 
-wishSchema.index({ status: 1, createdAt: -1 });
+wishSchema.index({ status: 1, deletedAt: 1, createdAt: -1 });
 
 export const Wish = mongoose.model('Wish', wishSchema);

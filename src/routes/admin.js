@@ -47,7 +47,7 @@ router.post('/login', loginLimit, async (req, res) => {
 });
 
 router.get('/wishes', requireAdmin, async (_req, res) => {
-  const wishes = await Wish.find()
+  const wishes = await Wish.find({ deletedAt: null })
     .select('name message videoUrl durationSeconds status createdAt')
     .sort({ createdAt: -1 })
     .lean();
@@ -65,7 +65,7 @@ router.patch('/wishes/:id', requireAdmin, async (req, res) => {
     return res.status(400).json({ error: 'Choose approve or reject.' });
   }
 
-  const wish = await Wish.findOne({ _id: id, status: 'pending' }).select('+publicId');
+  const wish = await Wish.findOne({ _id: id, status: 'pending', deletedAt: null }).select('+publicId');
   if (!wish) {
     return res.status(404).json({ error: 'Pending video wish not found.' });
   }
@@ -92,13 +92,22 @@ router.delete('/wishes/:id', requireAdmin, async (req, res) => {
     return res.status(400).json({ error: 'Invalid video-wish ID.' });
   }
 
-  const wish = await Wish.findById(id).select('+publicId');
+  const wish = await Wish.findOne({ _id: id, deletedAt: null }).select('+publicId');
   if (!wish) {
     return res.status(404).json({ error: 'Video wish not found.' });
   }
 
-  await removeCloudinaryVideo(wish.publicId);
-  await wish.deleteOne();
+  try {
+    await removeCloudinaryVideo(wish.publicId);
+  } catch (error) {
+    console.error('Cloudinary cleanup failed while deleting a video wish:', error);
+  }
+
+  wish.status = 'rejected';
+  wish.videoUrl = '';
+  wish.deletedAt = new Date();
+  await wish.save();
+
   return res.json({ message: 'Video wish permanently deleted.' });
 });
 

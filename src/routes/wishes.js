@@ -120,7 +120,11 @@ async function uploadVideo(filePath) {
 }
 
 router.get('/', requirePageAccess('birthday'), async (_req, res) => {
-  const wishes = await Wish.find({ status: 'approved' })
+  const wishes = await Wish.find({
+    status: 'approved',
+    deletedAt: null,
+    videoUrl: { $ne: '' },
+  })
     .select('name message videoUrl durationSeconds createdAt')
     .sort({ createdAt: -1 })
     .lean();
